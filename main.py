@@ -68,7 +68,7 @@ SYSTEM_PROMPT = """
 
 def save_message(user_name, message_text):
     """メッセージを履歴に保存"""
-    global conversation_history  
+    global conversation_history
     
     conversation_history.append({
         'timestamp': datetime.now().isoformat(),
@@ -78,10 +78,6 @@ def save_message(user_name, message_text):
     
     # 1年以上前のメッセージを削除
     cutoff_date = datetime.now() - timedelta(days=MAX_HISTORY_DAYS)
-    conversation_history = [
-        msg for msg in conversation_history 
-        if datetime.fromisoformat(msg['timestamp']) > cutoff_date
-    ]
     conversation_history = [
         msg for msg in conversation_history 
         if datetime.fromisoformat(msg['timestamp']) > cutoff_date
