@@ -1,5 +1,4 @@
 import os
-import json
 from datetime import datetime, timedelta
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
@@ -100,96 +99,6 @@ def format_messages_for_ai(messages):
         formatted += f"[{timestamp.strftime('%Y-%m-%d %H:%M')}] {msg['user']}: {msg['message']}\n"
     return formatted
 
-def generate_summary(messages):
-    """会話をまとめる"""
-    if not messages:
-        return "最近の会話がないよ〜 😅"
-    
-    messages_text = format_messages_for_ai(messages)
-    prompt = f"""
-{SYSTEM_PROMPT}
-
-以下は家族のLINEグループの会話履歴です。
-重要な情報を以下の形式でまとめてください：
-
-【会話履歴】
-{messages_text}
-
-【まとめ方】
-- 予定・スケジュールを日時順に整理
-- TODO・お願い事を箇条書き
-- 重要な決定事項をピックアップ
-- 日常会話は簡潔に要約
-
-フランクで親しみやすい口調でまとめてね！
-"""
-    
-    try:
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        return f"まとめ中にエラーが起きちゃった... 😅\nエラー: {str(e)}"
-
-def search_conversation(keyword):
-    """過去の会話を検索"""
-    results = []
-    for msg in conversation_history:
-        if keyword.lower() in msg['message'].lower():
-            results.append(msg)
-    
-    if not results:
-        return f"「{keyword}」に関する会話は見つからなかったよ〜 😅"
-    
-    # 新しい順にソート
-    results.sort(key=lambda x: x['timestamp'], reverse=True)
-    
-    # 結果をフォーマット
-    output = f"📌 「{keyword}」に関する会話を見つけたよ！\n\n"
-    for msg in results[:10]:  # 最大10件
-        timestamp = datetime.fromisoformat(msg['timestamp'])
-        output += f"• {timestamp.strftime('%Y年%m月%d日 %H:%M')}\n"
-        output += f"  {msg['user']}: {msg['message']}\n\n"
-    
-    if len(results) > 10:
-        output += f"他にも{len(results) - 10}件見つかったよ！"
-    
-    return output
-
-def get_today_schedule():
-    """今日の予定を抽出"""
-    today = datetime.now().date()
-    today_messages = [
-        msg for msg in conversation_history
-        if datetime.fromisoformat(msg['timestamp']).date() == today
-    ]
-    
-    if not today_messages:
-        return "今日は特に予定の話は出てないよ〜 😊"
-    
-    messages_text = format_messages_for_ai(today_messages)
-    prompt = f"""
-{SYSTEM_PROMPT}
-
-以下は今日の会話履歴です。
-今日の予定・スケジュールを抽出して教えてください。
-
-【会話履歴】
-{messages_text}
-
-【回答フォーマット】
-📅 今日の予定だよ！
-
-- 時間: ○時 / 誰: ○○さん / 予定: ○○
-
-予定がない場合は「今日は特に予定の話は出てないよ〜」って答えてね。
-"""
-    
-    try:
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        return f"予定を確認中にエラーが起きちゃった... 😅"
-
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
@@ -206,7 +115,7 @@ def callback():
 def handle_message(event):
     user_message = event.message.text
     
-    # ユーザー名を取得（実際のLINE表示名を取得）
+    # ユーザー名を取得
     try:
         profile = line_bot_api.get_profile(event.source.user_id)
         user_name = profile.display_name
@@ -220,31 +129,24 @@ def handle_message(event):
     if user_message.startswith('@調整マン'):
         command = user_message.replace('@調整マン', '').strip()
         
-        if 'まとめ' in command or 'まとめて' in command:
-            # 最近24時間の会話をまとめる
+        # デフォルトの返信
+        reply = f"呼んだ？何か手伝えることある？😊\n\n使い方：\n・@調整マン まとめ → 最近の会話をまとめるよ\n・@調整マン 予定 → 今日の予定を教えるよ"
+        
+        if 'まとめ' in command:
             recent = get_recent_messages(hours=24)
-            reply = generate_summary(recent)
-        
-        elif '予定' in command or 'スケジュール' in command:
-            # 今日の予定を表示
-            reply = get_today_schedule()
-        
-        elif 'いつ' in command or '検索' in command:
-            # キーワードを抽出して検索
-            keyword = command.replace('いつ', '').replace('検索', '').replace('?', '').replace('？', '').strip()
-            if keyword:
-                reply = search_conversation(keyword)
+            if recent:
+                messages_text = format_messages_for_ai(recent)
+                prompt = f"{SYSTEM_PROMPT}\n\n以下の会話をまとめてください：\n{messages_text}"
+                try:
+                    response = model.generate_content(prompt)
+                    reply = response.text
+                except:
+                    reply = "ごめん、まとめ中にエラーが出ちゃった... 😅"
             else:
-                reply = "何を検索したいか教えてね！\n例: @調整マン 旅行の話いつだっけ？"
+                reply = "最近の会話がないよ〜 😅"
         
-        else:
-            # その他の質問はGeminiに投げる
-            prompt = f"{SYSTEM_PROMPT}\n\n質問: {command}"
-            try:
-                response = model.generate_content(prompt)
-                reply = response.text
-            except Exception as e:
-                reply = "ごめん、ちょっとわからなかった... 😅"
+        elif '予定' in command:
+            reply = "予定の機能は開発中だよ！もう少し待ってね 😊"
         
         line_bot_api.reply_message(
             event.reply_token,
