@@ -17,7 +17,7 @@ handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
 # Gemini API設定
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash') 
+model = genai.GenerativeModel("gemini-2.5-flash")
 
 # 会話履歴を保存する辞書（グループIDごと）
 conversation_history = {}
